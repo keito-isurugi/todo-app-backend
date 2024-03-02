@@ -226,7 +226,7 @@ func TestNewTodoRepository_ChangeTodo(t *testing.T) {
 			}
 
 			todoRepo := postgres.NewTodoRepository(dbClient, zapLogger)
-			err = todoRepo.ChangeTodo(ctx, tt.request)
+			err = todoRepo.ChangeTodoDoneFlag(ctx, tt.request)
 
 			if tt.wantError != nil {
 				a.EqualError(err, tt.wantError.Error())

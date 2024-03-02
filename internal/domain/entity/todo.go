@@ -21,12 +21,12 @@ func NewRegisterTodo(
 	}
 }
 
-func NewChangeTodo(
+func NewChangeTodoDoneFlag(
 	id int,
-	title string,
+	doneFlag bool,
 ) *Todo {
 	return &Todo{
 		ID:    id,
-		Title: title,
+		DoneFlag: doneFlag,
 	}
 }

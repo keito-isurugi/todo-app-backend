@@ -20,10 +20,10 @@ func TestNewRegisterTodo(t *testing.T) {
 func TestNewChangeTodo(t *testing.T) {
 	a := assert.New(t)
 	id := 1
-	title := "タイトル1"
+	doneFlag := true
 
-	todo := entity.NewChangeTodo(id, title)
+	todo := entity.NewChangeTodoDoneFlag(id, doneFlag)
 
 	a.Equal(id, todo.ID)
-	a.Equal(title, todo.Title)
+	a.Equal(doneFlag, todo.DoneFlag)
 }

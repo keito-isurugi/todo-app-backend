@@ -16,7 +16,7 @@ import (
 type TodoHandler interface {
 	ListTodos(c echo.Context) error
 	RegisterTodo(c echo.Context) error
-	ChangeTodo(c echo.Context) error
+	ChangeTodoDoneFlag(c echo.Context) error
 }
 
 type todoHandler struct {
@@ -126,9 +126,8 @@ func (m *todoHandler) RegisterTodo(c echo.Context) error {
 	return c.JSON(http.StatusCreated, newCreatedResponse(id))
 }
 
-type changeTodoRequest struct {
-	TodoID int    `json:"todo_id" example:"1" ja:"TodoID" validate:"required"`
-	Title  string `json:"title" example:"サンプルタイトル" ja:"タイトル" validate:"required,max=255"`
+type changeTodoDoneFlagRequest struct {
+	DoneFlag bool   `json:"done_flag" example:"true" ja:"完了フラグ" validate:"required"`
 }
 
 // ChangeTodo
@@ -147,29 +146,23 @@ type changeTodoRequest struct {
 // @Failure		500	{object}	errResponse
 // @Router		/todos/{id} [put]
 // @Param		id						        path	string	true	"1"
-func (m *todoHandler) ChangeTodo(c echo.Context) error {
+func (m *todoHandler) ChangeTodoDoneFlag(c echo.Context) error {
 	traceID := c.Get("trace_id").(string)
 	id, _ := strconv.Atoi(c.Param("id"))
-	title := c.Param("title")
-
-	var req changeTodoRequest
+	
+	var req changeTodoDoneFlagRequest
 	if err := c.Bind(&req); err != nil {
 		res := createErrResponse(err)
 		res.outputErrorLog(m.zapLogger, err.Error(), traceID)
 		return c.JSON(res.Status, res)
 	}
 
-	if err := validate.Struct(req); err != nil {
-		m.zapLogger.Error(err.Error())
-		return c.JSON(http.StatusBadRequest, fieldErrors(err))
-	}
-
-	param := entity.NewChangeTodo(
+	param := entity.NewChangeTodoDoneFlag(
 		id,
-		title,
+		req.DoneFlag,
 	)
 
-	uc := usecase.NewChangeTodoUsecase(m.todoRepo)
+	uc := usecase.NewChangeTodoDoneFlagUsecase(m.todoRepo)
 	if err := uc.Exec(c.Request().Context(), param); err != nil {
 		res := createErrResponse(err)
 		res.outputErrorLog(m.zapLogger, err.Error(), traceID)

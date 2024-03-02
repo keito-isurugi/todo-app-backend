@@ -11,5 +11,5 @@ type Todo interface {
 	GetTodo(ctx context.Context, id int) (*entity.Todo, error)
 	ListTodos(ctx context.Context) (entity.ListTodos, error)
 	RegisterTodo(ctx context.Context, todo *entity.Todo) (int, error)
-	ChangeTodo(ctx context.Context, todo *entity.Todo) error
+	ChangeTodoDoneFlag(ctx context.Context, todo *entity.Todo) error
 }

@@ -55,7 +55,7 @@ func (m *todoRepository) RegisterTodo(ctx context.Context, todo *entity.Todo) (i
 	return todo.ID, nil
 }
 
-func (m *todoRepository) ChangeTodo(ctx context.Context, todo *entity.Todo) error {
+func (m *todoRepository) ChangeTodoDoneFlag(ctx context.Context, todo *entity.Todo) error {
 	var me *entity.Todo
 	if err := m.dbClient.Conn(ctx).
 		Table("todos").
@@ -68,7 +68,7 @@ func (m *todoRepository) ChangeTodo(ctx context.Context, todo *entity.Todo) erro
 	}
 
 	updateColumns := map[string]any{
-		"title": todo.Title,
+		"done_flag": todo.DoneFlag,
 	}
 
 	return m.dbClient.Conn(ctx).

@@ -40,7 +40,7 @@ func SetupRouter(ev *env.Values, dbClient db.Client, awsClient s3iface.S3API, za
 	todoGroup := e.Group("/todos")
 	todoGroup.GET("", todoHandler.ListTodos)
 	todoGroup.POST("", todoHandler.RegisterTodo)
-	todoGroup.PUT("/:id/_change", todoHandler.ChangeTodo)
+	todoGroup.PUT("/:id/change_done_flag", todoHandler.ChangeTodoDoneFlag)
 
 	for _, route := range e.Routes() {
 		zapLogger.Info("route", zap.String("method", route.Method), zap.String("path", route.Path))
