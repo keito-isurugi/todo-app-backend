@@ -82,7 +82,7 @@ func (h *todoHandler) ListTodos(c echo.Context) error {
 }
 
 type registerTodoRequest struct {
-	Title string `json:"title" example:"サンプルタイトル" ja:"タイトル" validate:"required,len=255"`
+	Title string `json:"title" example:"サンプルタイトル" ja:"タイトル" validate:"required,max=255"`
 }
 
 // RegisterTodo
@@ -128,7 +128,7 @@ func (m *todoHandler) RegisterTodo(c echo.Context) error {
 
 type changeTodoRequest struct {
 	TodoID int    `json:"todo_id" example:"1" ja:"TodoID" validate:"required"`
-	Title  string `json:"title" example:"サンプルタイトル" ja:"タイトル" validate:"required,len=255"`
+	Title  string `json:"title" example:"サンプルタイトル" ja:"タイトル" validate:"required,max=255"`
 }
 
 // ChangeTodo

@@ -39,7 +39,7 @@ func SetupRouter(ev *env.Values, dbClient db.Client, awsClient s3iface.S3API, za
 	// todos
 	todoGroup := e.Group("/todos")
 	todoGroup.GET("", todoHandler.ListTodos)
-	todoGroup.POST("/:id", todoHandler.RegisterTodo)
+	todoGroup.POST("", todoHandler.RegisterTodo)
 	todoGroup.PUT("/:id/_change", todoHandler.ChangeTodo)
 
 	for _, route := range e.Routes() {
