@@ -1,0 +1,105 @@
+version: '3'
+services:
+  api:
+    container_name: api
+    build:
+      context: .
+      dockerfile: Dockerfile-dev
+    volumes:
+      - .:/app
+    ports:
+      - ${SERVER_PORT}:${SERVER_PORT}
+    env_file:
+      - .env
+    networks:
+      - todo-app-network
+  db:
+    container_name: db
+    image: postgres:14.5
+    tty: true
+    ports:
+      - ${POSTGRES_PORT}:${POSTGRES_PORT}
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DATABASE}
+    volumes:
+      - ./persist/postgres:/var/lib/postgresql/data
+      - ./DDL:/docker-entrypoint-initdb.d
+    networks:
+      - todo-app-network
+  db-test:
+    container_name: db-test
+    image: postgres:14.5
+    tty: true
+    ports:
+      - 15432:${TEST_POSTGRES_PORT}
+    environment:
+      POSTGRES_HOST: ${TEST_POSTGRES_HOST}
+      POSTGRES_PORT: ${TEST_POSTGRES_PORT}
+      POSTGRES_USER: ${TEST_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${TEST_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${TEST_POSTGRES_DATABASE}
+    volumes:
+      - ./persist/postgres-test:/var/lib/postgresql/data
+      - ./DDL:/docker-entrypoint-initdb.d
+    networks:
+      - todo-app-network
+  pgadmin:
+    container_name: example-pgadmin
+    image: dpage/pgadmin4:latest
+    ports:
+      - "5050:80"
+    volumes:
+      - ./persist/pgadmin:/var/lib/pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@gmail.com
+      PGADMIN_DEFAULT_PASSWORD: password
+    depends_on:
+      - db
+  swagger-ui:
+    container_name: todo-app-swagger-ui
+    image: swaggerapi/swagger-ui:latest
+    ports:
+      - "8002:8080"
+    volumes:
+      - ./swagger/src/swagger.yaml:/swagger.yaml
+    environment:
+      SWAGGER_JSON: /swagger.yaml
+    networks:
+      - todo-app-network
+  redoc:
+    container_name: todo-app-redoc
+    image: redocly/redoc:latest
+    ports:
+      - "8001:80"
+    volumes:
+      - ./swagger/src/swagger.yaml:/usr/share/nginx/html/swagger.yaml
+    environment:
+      - SPEC_URL=swagger.yaml
+    networks:
+      - todo-app-network
+  todo-app-localstack:
+    build:
+      context: .
+      dockerfile: docker/localstack/Dockerfile
+    container_name: todo-app-localstack
+    environment:
+      - SERVICES=s3
+      - DEBUG=1
+      - DOCKER_SOCK=/var/run/docker.sock
+      - DATA_DIR=/tmp/localstack/data
+      - DEFAULT_REGION=ap-northeast-1
+    volumes:
+      - ./docker/localstack:/docker-entrypoint-initaws.d:ro
+      - ./persist/localstack/data:/var/lib/localstack/
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "4566:4566"
+    networks:
+      - todo-app-network
+networks:
+  todo-app-network:
+    external: false

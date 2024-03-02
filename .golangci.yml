@@ -1,0 +1,33 @@
+linters-settings:
+  golint:
+    min-confidence: 0.8
+  govet:
+    check-shadowing: true
+  goimports:
+    local-prefixes: github.com/keito-isurugi/todo-app-backend
+  gocyclo:
+    min-complexity: 15
+
+linters:
+  enable:
+    - revive
+    - unused
+    - govet
+    - goimports
+    - gocyclo
+    - misspell
+    - unparam
+    - nakedret
+    - gosec
+    - gomnd
+    - gocognit
+    - goconst
+    - gosimple
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+    - whitespace
+
+run:
+  deadline: 5m

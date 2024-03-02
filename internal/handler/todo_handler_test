@@ -1,0 +1,541 @@
+package handler
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/golang/mock/gomock"
+	"github.com/labstack/echo/v4"
+	"github.com/pkg/errors"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/keito-isurugi/todo-app-backend/internal/domain/entity"
+	todoMock "github.com/keito-isurugi/todo-app-backend/internal/domain/repository/mock"
+	"github.com/keito-isurugi/todo-app-backend/internal/infra/logger"
+	dbError "github.com/keito-isurugi/todo-app-backend/internal/infra/postgres"
+)
+
+func TestTodoHandler_ListTodos(t *testing.T) {
+	a := assert.New(t)
+	zapLogger, err := logger.NewLogger(true)
+	a.NoError(err)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockTodoRepo := todoMock.NewMockTodo(ctrl)
+	mockTodoHandler := NewTodoHandler(mockTodoRepo, zapLogger)
+
+	tests := []struct {
+		id            int
+		name          string
+		branchID      string
+		mockCall      bool
+		expected      entity.ListTodos
+		expectedError dbError.DBError
+		wantStatus    int
+		wantBody      func() string
+		wantError     error
+		wantErrorBody map[string]any
+	}{
+		{
+			id:            1,
+			name:          "正常系",
+			branchID:      "101",
+			mockCall:      true,
+			expected:      expectedListTodos(),
+			expectedError: nil,
+			wantStatus:    http.StatusOK,
+			wantBody: func() string {
+				res := createListTodosResponse()
+				wantBody, _ := json.Marshal(res)
+				return string(wantBody)
+			},
+		},
+		{
+			id:            2,
+			name:          "異常系/DBエラー",
+			branchID:      "101",
+			mockCall:      true,
+			expected:      nil,
+			expectedError: errors.New("db error"),
+			wantStatus:    http.StatusInternalServerError,
+			wantError:     errors.New("code=500, message=db error"),
+			wantBody: func() string {
+				res := errResponse{
+					Message: "db error",
+					Status:  http.StatusInternalServerError,
+				}
+				wantBody, _ := json.Marshal(res)
+				return string(wantBody)
+			},
+		},
+		{
+			id:            3,
+			name:          "異常系/branch_idが空",
+			branchID:      "",
+			mockCall:      false,
+			expected:      nil,
+			expectedError: errors.New("branch id is required"),
+			wantStatus:    http.StatusBadRequest,
+			wantError:     errors.New("code=500, message=db error"),
+			wantBody: func() string {
+				res := errResponse{
+					Message: "Key: 'path.BranchID' Error:Field validation for 'BranchID' failed on the 'required' tag",
+					Status:  http.StatusBadRequest,
+				}
+				wantBody, _ := json.Marshal(res)
+				return string(wantBody)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := echo.New()
+			a = assert.New(t)
+
+			req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/branches/%s/todos", tt.branchID), nil)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+			c.Set("trace_id", "test_trace_id")
+			c.SetPath("/branches/:branch_id/todos")
+			c.SetParamNames("branch_id")
+			c.SetParamValues(tt.branchID)
+
+			// バリデーションエラーなどではmockを呼び出さないケースもある
+			if tt.mockCall {
+				mockTodoRepo.EXPECT().ListTodos(c.Request().Context(), tt.branchID).Return(tt.expected, tt.expectedError)
+			}
+			err = mockTodoHandler.ListTodos(c)
+
+			if tt.wantError != nil {
+				a.Equal(tt.wantStatus, rec.Code)
+				a.Equal(tt.wantBody(), strings.TrimSpace(rec.Body.String()))
+				return
+			}
+
+			a.NoError(err)
+			a.Equal(tt.wantStatus, rec.Code)
+			// response bodyに改行コードが入るので取り除いてから比較
+			a.Equal(tt.wantBody(), strings.TrimSpace(rec.Body.String()))
+		})
+	}
+}
+
+func createListTodosResponse() listTodosResponse {
+	return []todoResponse{
+		{
+			ID:          1,
+			BankID:      "0158",
+			BranchID:    "101",
+			Duration:    30,
+			IsAvailable: true,
+			RequireNote: true,
+			Caution:     "注意書き",
+			ClosingDay:  1,
+			ClosingHour: 10,
+		},
+		{
+			ID:          2,
+			BankID:      "0158",
+			BranchID:    "101",
+			Duration:    60,
+			IsAvailable: false,
+			RequireNote: false,
+			Caution:     "備考",
+			ClosingDay:  5,
+			ClosingHour: 5,
+		},
+	}
+}
+
+// ListTodosのmockの期待値を作成
+func expectedListTodos() entity.ListTodos {
+	return entity.ListTodos{
+		{
+			ID:          1,
+			BankID:      "0158",
+			BranchID:    "101",
+			Duration:    30,
+			IsAvailable: true,
+			RequireNote: true,
+			Caution:     "注意書き",
+			ClosingDay:  1,
+			ClosingHour: 10,
+		},
+		{
+			ID:          2,
+			BankID:      "0158",
+			BranchID:    "101",
+			Duration:    60,
+			IsAvailable: false,
+			RequireNote: false,
+			Caution:     "備考",
+			ClosingDay:  5,
+			ClosingHour: 5,
+		},
+	}
+}
+
+func TestTodoHandler_RegisterTodo(t *testing.T) {
+	a := assert.New(t)
+	zapLogger, err := logger.NewLogger(true)
+	a.NoError(err)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockTodoRepo := todoMock.NewMockTodo(ctrl)
+	mockTodoHandler := NewTodoHandler(mockTodoRepo, zapLogger)
+
+	tests := []struct {
+		id            int
+		name          string
+		branchID      string
+		request       *registerTodoRequest
+		mockCall      bool
+		expected      int
+		expectedError dbError.DBError
+		wantStatus    int
+		wantBody      func() string
+		wantError     error
+	}{
+		{
+			id:       1,
+			name:     "正常系",
+			branchID: "101",
+			request: &registerTodoRequest{
+				BankID:       "0158",
+				TodoMasterID: 1,
+				TodoGroupID:  1,
+				Duration:     30,
+				IsAvailable:  true,
+				RequireNote:  true,
+				Caution:      "注意事項",
+				ClosingDay:   1,
+				ClosingHour:  1,
+			},
+			mockCall:      true,
+			expected:      1,
+			expectedError: nil,
+			wantStatus:    http.StatusCreated,
+			wantBody: func() string {
+				return createCommonCreatedResponse(1)
+			},
+		},
+		{
+			id:         2,
+			name:       "異常系/バリデーションエラー/主にrequired",
+			branchID:   "101",
+			request:    &registerTodoRequest{},
+			mockCall:   false,
+			wantStatus: http.StatusBadRequest,
+			wantBody: func() string {
+				errRes := []fieldError{
+					{
+						Field: "銀行ID",
+						Error: "required",
+					},
+					{
+						Field: "メニューマスターID",
+						Error: "required",
+					},
+					{
+						Field: "メニュー種別ID",
+						Error: "required",
+					},
+					{
+						Field: "所要時間",
+						Error: "required",
+					},
+					{
+						Field: "受付終了日",
+						Error: "required",
+					},
+					{
+						Field: "受付終了時間",
+						Error: "required",
+					},
+				}
+				wantBody, _ := json.Marshal(errRes)
+				return string(wantBody)
+			},
+		},
+		{
+			id:       3,
+			name:     "異常系/バリデーションエラー/主に文字数などの制約系",
+			branchID: "101",
+			request: &registerTodoRequest{
+				BankID:       "01589",
+				TodoMasterID: 1,
+				TodoGroupID:  1,
+				Duration:     30,
+				IsAvailable:  true,
+				RequireNote:  true,
+				Caution:      strings.Repeat("a", 256),
+				ClosingDay:   1,
+				ClosingHour:  1,
+			},
+			mockCall:   false,
+			wantStatus: http.StatusBadRequest,
+			wantBody: func() string {
+				errRes := []fieldError{
+					{
+						Field: "銀行ID",
+						Error: "len",
+					},
+					{
+						Field: "補足欄注意書き",
+						Error: "max",
+					},
+				}
+				wantBody, _ := json.Marshal(errRes)
+				return string(wantBody)
+			},
+		},
+		{
+			id:       4,
+			name:     "異常系/DBエラー",
+			branchID: "101",
+			request: &registerTodoRequest{
+				BankID:       "0158",
+				TodoMasterID: 1,
+				TodoGroupID:  1,
+				Duration:     30,
+				IsAvailable:  true,
+				RequireNote:  true,
+				Caution:      "注意事項",
+				ClosingDay:   1,
+				ClosingHour:  1,
+			},
+			mockCall:      true,
+			expectedError: &dbError.InternalServerError{Message: "DBエラー"},
+			wantStatus:    http.StatusInternalServerError,
+			wantBody: func() string {
+				res := errResponse{
+					Message: "DBエラー",
+					Status:  http.StatusInternalServerError,
+				}
+				wantBody, _ := json.Marshal(res)
+				return string(wantBody)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a = assert.New(t)
+			e := echo.New()
+
+			var req *http.Request
+			jsonStr, _ := json.Marshal(tt.request)
+
+			req = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/branches/%s/todos", tt.branchID), bytes.NewBuffer(jsonStr))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+			c.Set("trace_id", "test_trace_id")
+			c.SetPath("/branches/:branch_id/todos")
+			c.SetParamNames("branch_id")
+			c.SetParamValues(tt.branchID)
+
+			// バリデーションエラーなどではmockを呼び出さないケースもある
+			if tt.mockCall {
+				mockTodoRepo.EXPECT().RegisterTodo(c.Request().Context(), gomock.Any()).Return(tt.expected, tt.expectedError)
+			}
+			_ = mockTodoHandler.RegisterTodo(c)
+
+			a.Equal(tt.wantStatus, rec.Code)
+			// response bodyに改行コードが入るので取り除いてから比較
+			a.Equal(tt.wantBody(), strings.TrimSpace(rec.Body.String()))
+		})
+	}
+}
+
+func TestTodoHandler_ChangeTodo(t *testing.T) {
+	a := assert.New(t)
+	zapLogger, err := logger.NewLogger(true)
+	a.NoError(err)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockTodoRepo := todoMock.NewMockTodo(ctrl)
+	mockTodoHandler := NewTodoHandler(mockTodoRepo, zapLogger)
+
+	tests := []struct {
+		id            int
+		name          string
+		branchID      string
+		TodoID        string
+		request       *changeTodoRequest
+		mockCall      bool
+		expectedError dbError.DBError
+		wantStatus    int
+		wantBody      func() string
+	}{
+		{
+			id:       1,
+			name:     "正常系",
+			branchID: "101",
+			TodoID:   "1",
+			request: &changeTodoRequest{
+				TodoGroupID: 1,
+				Duration:    30,
+				IsAvailable: true,
+				RequireNote: true,
+				Caution:     "注意事項",
+				ClosingDay:  1,
+				ClosingHour: 1,
+			},
+			mockCall:      true,
+			expectedError: nil,
+			wantStatus:    http.StatusAccepted,
+			wantBody: func() string {
+				return "{}"
+			},
+		},
+		{
+			id:            2,
+			name:          "異常系/バリデーションエラー/主にrequired",
+			branchID:      "101",
+			TodoID:        "1",
+			request:       &changeTodoRequest{},
+			mockCall:      false,
+			expectedError: nil,
+			wantStatus:    http.StatusBadRequest,
+			wantBody: func() string {
+				errRes := []fieldError{
+					{
+						Field: "メニュー種別ID",
+						Error: "required",
+					},
+					{
+						Field: "所要時間",
+						Error: "required",
+					},
+					{
+						Field: "受付終了日",
+						Error: "required",
+					},
+					{
+						Field: "受付終了時間",
+						Error: "required",
+					},
+				}
+				wantBody, _ := json.Marshal(errRes)
+				return string(wantBody)
+			},
+		},
+		{
+			id:       3,
+			name:     "異常系/バリデーションエラー/主に文字数などの制約系",
+			branchID: "101",
+			TodoID:   "1",
+			request: &changeTodoRequest{
+				TodoGroupID: 1,
+				Duration:    30,
+				IsAvailable: true,
+				RequireNote: true,
+				Caution:     strings.Repeat("a", 256),
+				ClosingDay:  1,
+				ClosingHour: 1,
+			},
+			mockCall:   false,
+			wantStatus: http.StatusBadRequest,
+			wantBody: func() string {
+				errRes := []fieldError{
+					{
+						Field: "補足欄注意書き",
+						Error: "max",
+					},
+				}
+				wantBody, _ := json.Marshal(errRes)
+				return string(wantBody)
+			},
+		},
+		{
+			id:       4,
+			name:     "異常系/DBエラー",
+			branchID: "101",
+			TodoID:   "1",
+			request: &changeTodoRequest{
+				TodoGroupID: 1,
+				Duration:    30,
+				IsAvailable: true,
+				RequireNote: true,
+				Caution:     "注意事項",
+				ClosingDay:  1,
+				ClosingHour: 1,
+			},
+			mockCall:      true,
+			expectedError: &dbError.InternalServerError{Message: "DBエラー"},
+			wantStatus:    http.StatusInternalServerError,
+			wantBody: func() string {
+				res := errResponse{
+					Message: "DBエラー",
+					Status:  http.StatusInternalServerError,
+				}
+				wantBody, _ := json.Marshal(res)
+				return string(wantBody)
+			},
+		},
+		{
+			id:       5,
+			name:     "異常系/対象のレコードがない場合エラーになること",
+			branchID: "101",
+			TodoID:   "999",
+			request: &changeTodoRequest{
+				TodoGroupID: 1,
+				Duration:    30,
+				IsAvailable: true,
+				RequireNote: true,
+				Caution:     "注意事項",
+				ClosingDay:  1,
+				ClosingHour: 1,
+			},
+			mockCall:      true,
+			expectedError: &dbError.NotFoundError{Message: "Todo not found"},
+			wantStatus:    http.StatusNotFound,
+			wantBody: func() string {
+				res := errResponse{
+					Message: "Todo not found",
+					Status:  http.StatusNotFound,
+				}
+				wantBody, _ := json.Marshal(res)
+				return string(wantBody)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a = assert.New(t)
+			e := echo.New()
+
+			var req *http.Request
+			jsonStr, _ := json.Marshal(tt.request)
+
+			req = httptest.NewRequest(http.MethodPut, fmt.Sprintf("/branches/%s/todos/%s/_change", tt.branchID, tt.TodoID), bytes.NewBuffer(jsonStr))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+			c.Set("trace_id", "test_trace_id")
+			c.SetPath("/branches/:branch_id/todos/:id/_change")
+			c.SetParamNames("branch_id", "id")
+			c.SetParamValues(tt.branchID, tt.TodoID)
+			// バリデーションエラーなどではmockを呼び出さないケースもある
+			if tt.mockCall {
+				mockTodoRepo.EXPECT().ChangeTodo(c.Request().Context(), gomock.Any()).Return(tt.expectedError)
+			}
+			_ = mockTodoHandler.ChangeTodo(c)
+
+			a.Equal(tt.wantStatus, rec.Code)
+			// response bodyに改行コードが入るので取り除いてから比較
+			a.Equal(tt.wantBody(), strings.TrimSpace(rec.Body.String()))
+		})
+	}
+}
