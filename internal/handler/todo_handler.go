@@ -17,6 +17,7 @@ type TodoHandler interface {
 	ListTodos(c echo.Context) error
 	RegisterTodo(c echo.Context) error
 	ChangeTodoDoneFlag(c echo.Context) error
+	DeleteTodo(c echo.Context) error
 }
 
 type todoHandler struct {
@@ -130,10 +131,10 @@ type changeTodoDoneFlagRequest struct {
 	DoneFlag bool   `json:"done_flag" example:"true" ja:"完了フラグ" validate:"required"`
 }
 
-// ChangeTodo
-// @Summary		Todo編集
-// @Description	Todo編集
-// @id ChangeTodo
+// ChangeTodoDoneFlag
+// @Summary		Todo完了フラグ変更
+// @Description	Todo完了フラグ変更
+// @id ChangeTodoDoneFlag
 // @tags		todo
 // @Accept		json
 // @Produce		json
@@ -164,6 +165,33 @@ func (m *todoHandler) ChangeTodoDoneFlag(c echo.Context) error {
 
 	uc := usecase.NewChangeTodoDoneFlagUsecase(m.todoRepo)
 	if err := uc.Exec(c.Request().Context(), param); err != nil {
+		res := createErrResponse(err)
+		res.outputErrorLog(m.zapLogger, err.Error(), traceID)
+		return c.JSON(res.Status, res)
+	}
+	return c.JSON(http.StatusAccepted, emptyResponse{})
+}
+
+// DeleteTodo
+// @Summary		Todo削除
+// @Description	Todoを削除
+// @id			DeleteTodo
+// @tags		todo
+// @Accept		json
+// @Produce		json
+// @Success		201			{object}	createdResponse
+// @Failure		400			{object}	fieldError
+// @Failure		401			{object}	errResponse
+// @Failure		403			{object}	errResponse
+// @Failure		500			{object}	errResponse
+// @Router		/todos/{id} [delete]
+// @Param request body registerTodoRequest true "registerTodoRequest"
+func (m *todoHandler) DeleteTodo(c echo.Context) error {
+	traceID := c.Get("trace_id").(string)
+	id, _ := strconv.Atoi(c.Param("id"))
+
+	uc := usecase.NewDeleteTodoUsecase(m.todoRepo)
+	if err := uc.Exec(c.Request().Context(), id); err != nil {
 		res := createErrResponse(err)
 		res.outputErrorLog(m.zapLogger, err.Error(), traceID)
 		return c.JSON(res.Status, res)

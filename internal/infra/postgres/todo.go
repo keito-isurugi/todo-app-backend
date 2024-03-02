@@ -48,19 +48,19 @@ func (r *todoRepository) GetTodo(ctx context.Context, id int) (*entity.Todo, err
 	return &todo, nil
 }
 
-func (m *todoRepository) RegisterTodo(ctx context.Context, todo *entity.Todo) (int, error) {
-	if err := m.dbClient.Conn(ctx).Table("todos").Create(todo).Error; err != nil {
+func (t *todoRepository) RegisterTodo(ctx context.Context, todo *entity.Todo) (int, error) {
+	if err := t.dbClient.Conn(ctx).Table("todos").Create(todo).Error; err != nil {
 		return 0, err
 	}
 	return todo.ID, nil
 }
 
-func (m *todoRepository) ChangeTodoDoneFlag(ctx context.Context, todo *entity.Todo) error {
-	var me *entity.Todo
-	if err := m.dbClient.Conn(ctx).
+func (t *todoRepository) ChangeTodoDoneFlag(ctx context.Context, todo *entity.Todo) error {
+	var to *entity.Todo
+	if err := t.dbClient.Conn(ctx).
 		Table("todos").
 		Where("id", todo.ID).
-		First(&me).Error; err != nil {
+		First(&to).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return &NotFoundError{Message: err.Error()}
 		}
@@ -71,8 +71,27 @@ func (m *todoRepository) ChangeTodoDoneFlag(ctx context.Context, todo *entity.To
 		"done_flag": todo.DoneFlag,
 	}
 
-	return m.dbClient.Conn(ctx).
+	return t.dbClient.Conn(ctx).
 		Model(&entity.Todo{}).
 		Where("id = ?", todo.ID).
 		Updates(updateColumns).Error
+}
+
+func (t *todoRepository) DeleteTodo(ctx context.Context, id int) error {
+	var todo *entity.Todo
+	if err := t.dbClient.Conn(ctx).
+		Table("todos").
+		Where("id", id).
+		First(&todo).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return &NotFoundError{Message: err.Error()}
+		}
+		return err
+	}
+
+	if err := t.dbClient.Conn(ctx).Delete(&todo).Error; err != nil {
+        return err
+    }
+
+    return nil
 }
