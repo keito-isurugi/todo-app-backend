@@ -4,13 +4,23 @@ services:
     container_name: api
     build:
       context: .
-      dockerfile: Dockerfile-dev
+      dockerfile: Dockerfile
     volumes:
       - .:/app
     ports:
       - ${SERVER_PORT}:${SERVER_PORT}
     env_file:
       - .env
+    networks:
+      - todo-app-network
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - api
     networks:
       - todo-app-network
   db:
@@ -102,4 +112,5 @@ services:
       - todo-app-network
 networks:
   todo-app-network:
+    driver: bridge
     external: false

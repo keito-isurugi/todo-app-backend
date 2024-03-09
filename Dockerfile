@@ -7,8 +7,13 @@ COPY . .
 RUN go mod download \
     && go build -o /app/main /app/cmd/api/main.go
 
-FROM golang:1.22-alpine
+FROM nginx:latest
 
-COPY --from=builder /app/main ./
+# Nginxの設定ファイルをコピー
+COPY nginx/nginx.conf /etc/nginx/nginx.conf
 
-CMD ["./main"]
+# ビルドしたGoアプリをコピー
+COPY --from=builder /app/main /usr/share/nginx/html
+
+# Nginxを起動
+CMD ["nginx", "-g", "daemon off;"]
